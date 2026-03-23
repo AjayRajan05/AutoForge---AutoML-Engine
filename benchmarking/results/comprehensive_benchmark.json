@@ -1,0 +1,111 @@
+{
+  "datasets": [
+    {
+      "dataset_name": "Small Classification",
+      "dataset_type": "classification",
+      "dataset_size": "small",
+      "dataset_description": "100 samples, 10 features",
+      "systems": {
+        "AutoForge": {
+          "system": "AutoForge",
+          "performance": {
+            "accuracy": 0.6,
+            "f1_score": 0.4875
+          },
+          "success": true,
+          "time": 63.82232737541199,
+          "memory": 0.2734375,
+          "stability": true
+        }
+      }
+    },
+    {
+      "dataset_name": "Medium Classification",
+      "dataset_type": "classification",
+      "dataset_size": "medium",
+      "dataset_description": "500 samples, 20 features",
+      "systems": {
+        "AutoForge": {
+          "system": "AutoForge",
+          "performance": null,
+          "success": false,
+          "error": "Failed to build best pipeline: Unknown component type: feature_selection",
+          "time": 246.38660860061646,
+          "memory": -6.9296875,
+          "stability": false
+        }
+      }
+    }
+  ],
+  "system_performance": {
+    "AutoForge": {
+      "performances": [
+        {
+          "accuracy": 0.6,
+          "f1_score": 0.4875
+        }
+      ],
+      "times": [
+        63.82232737541199
+      ],
+      "memories": [
+        0.2734375
+      ],
+      "stabilities": [
+        true
+      ],
+      "success_rate": 0.5,
+      "avg_performance": {
+        "f1_score": 0.4875,
+        "f1_score_std": 0.0,
+        "accuracy": 0.6,
+        "accuracy_std": 0.0
+      },
+      "avg_time": 63.82232737541199,
+      "avg_memory": 0.2734375,
+      "stability_rate": 1.0
+    }
+  },
+  "visualizations": {
+    "accuracy_vs_time": "benchmarking\\results\\accuracy_vs_time.png",
+    "memory_usage": "benchmarking\\results\\memory_usage.png",
+    "stability": "benchmarking\\results\\stability.png",
+    "performance_comparison": "benchmarking\\results\\performance_comparison.png"
+  },
+  "insights": {
+    "performance_analysis": {
+      "AutoForge": {
+        "avg_accuracy": 0.6,
+        "avg_r2": 0,
+        "avg_time": 63.82232737541199,
+        "avg_memory": 0.2734375,
+        "success_rate": 0.5,
+        "stability_rate": 1.0
+      }
+    },
+    "efficiency_analysis": {
+      "best_accuracy_system": "AutoForge",
+      "fastest_system": "AutoForge",
+      "most_efficient_system": "AutoForge",
+      "best_overall": null
+    },
+    "recommendations": {},
+    "actionable_insights": [
+      {
+        "system": "AutoForge",
+        "type": "low_performance",
+        "insight": "AutoForge shows low accuracy across datasets",
+        "recommendation": "Consider feature engineering or hyperparameter tuning",
+        "priority": "high"
+      },
+      {
+        "system": "AutoForge",
+        "type": "low_reliability",
+        "insight": "AutoForge fails on 50% of datasets",
+        "recommendation": "Improve error handling and dataset compatibility",
+        "priority": "high"
+      }
+    ]
+  },
+  "timestamp": 1774252910.8877096
+}
