@@ -254,7 +254,15 @@ class ModelExplainability:
             explainer_type = self._choose_shap_explainer(model, df_sample)
             
             if explainer_type == "tree":
-                self.shap_explainer = shap.TreeExplainer(model)
+                try:
+                    self.shap_explainer = shap.TreeExplainer(model, check_additivity=False)
+                except Exception as e:
+                    logger.warning(f"TreeExplainer failed, trying with intervention: {e}")
+                    try:
+                        self.shap_explainer = shap.TreeExplainer(model, feature_perturbation='interventional', check_additivity=False)
+                    except Exception as e2:
+                        logger.error(f"TreeExplainer with intervention failed: {e2}")
+                        raise e2
             elif explainer_type == "linear":
                 self.shap_explainer = shap.LinearExplainer(model, df_sample)
             elif explainer_type == "kernel":

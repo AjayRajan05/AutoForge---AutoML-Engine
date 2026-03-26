@@ -12,6 +12,28 @@ from ..prediction import PredictionHandler
 from ..feature_engineering import FeatureEngineeringTransformer
 from core.progress_tracker import create_progress_tracker
 
+# Import advanced components with error handling
+try:
+    from nas.revolutionary_nas import AdvancedNAS
+    NAS_AVAILABLE = True
+except ImportError:
+    NAS_AVAILABLE = False
+    AdvancedNAS = None
+
+try:
+    from multimodal.intelligent_multimodal import AdvancedMultimodalAutoML
+    MULTIMODAL_AVAILABLE = True
+except ImportError:
+    MULTIMODAL_AVAILABLE = False
+    AdvancedMultimodalAutoML = None
+
+try:
+    from distributed.intelligent_distributed import AdvancedDistributedAutoML
+    DISTRIBUTED_AVAILABLE = True
+except ImportError:
+    DISTRIBUTED_AVAILABLE = False
+    AdvancedDistributedAutoML = None
+
 
 class AutoMLCoordinator:
     """
@@ -20,8 +42,13 @@ class AutoMLCoordinator:
     
     def __init__(self, n_trials=50, timeout=None, cv=3, 
                  use_adaptive_optimization=True, use_dataset_optimization=True,
-                 use_caching=True, show_progress=True):
+                 use_caching=True, show_progress=True, enable_advanced_features=True):
         """Initialize coordinator with configuration"""
+        
+        # Setup logging first
+        logging.basicConfig(level=logging.INFO)
+        self.logger = logging.getLogger(__name__)
+        
         self.n_trials = n_trials
         self.timeout = timeout
         self.cv = cv
@@ -29,6 +56,7 @@ class AutoMLCoordinator:
         self.use_dataset_optimization = use_dataset_optimization
         self.use_caching = use_caching
         self.show_progress = show_progress
+        self.enable_advanced_features = enable_advanced_features
 
         # Initialize specialized components
         self.progress_tracker = create_progress_tracker(show_progress=show_progress) if show_progress else None
@@ -39,6 +67,31 @@ class AutoMLCoordinator:
         )
         self.pipeline_builder = PipelineBuilder(use_caching=use_caching)
         self.prediction_handler = PredictionHandler()
+        
+        # Initialize advanced components
+        if enable_advanced_features:
+            # 🔥 PRODUCTION-GRADE: Safe initialization with fallbacks
+            self.nas_engine = AdvancedNAS() if NAS_AVAILABLE and AdvancedNAS else None
+            self.multimodal_engine = AdvancedMultimodalAutoML() if MULTIMODAL_AVAILABLE and AdvancedMultimodalAutoML else None
+            self.distributed_engine = AdvancedDistributedAutoML() if DISTRIBUTED_AVAILABLE and AdvancedDistributedAutoML else None
+            
+            # Log what's actually available
+            available_features = []
+            if self.nas_engine:
+                available_features.append("NAS")
+            if self.multimodal_engine:
+                available_features.append("Multimodal")
+            if self.distributed_engine:
+                available_features.append("Distributed")
+            
+            if available_features:
+                self.logger.info(f"🚀 Advanced AutoML features enabled: {', '.join(available_features)}")
+            else:
+                self.logger.warning("⚠️ Advanced features requested but none available")
+        else:
+            self.nas_engine = None
+            self.multimodal_engine = None
+            self.distributed_engine = None
 
         # State tracking
         self.best_pipeline = None
@@ -50,18 +103,21 @@ class AutoMLCoordinator:
         self.optimization_metadata = {}
         self.dataset_metadata = {}
 
-        # Setup logging
-        self.logger = logging.getLogger(__name__)
-
     def run_automl_workflow(self, X, y):
         """
-        Execute the complete AutoML workflow
+        Execute the complete AutoML workflow with advanced features
         Returns: fitted AutoML instance
         """
         try:
             # Start progress tracking
             if self.progress_tracker:
                 self.progress_tracker.start_optimization(self.n_trials, "unknown")
+            
+            # Step 0: Advanced multimodal analysis (if enabled)
+            if self.enable_advanced_features and self.multimodal_engine:
+                self.logger.info("🌐 Running advanced multimodal analysis...")
+                multimodal_analysis = self.multimodal_engine.analyze_multimodal_data(X, y)
+                self.logger.info(f"🎯 Detected modalities: {list(multimodal_analysis['modalities'].keys())}")
             
             # Step 1: Data preparation
             (X_processed, y_processed, data_type_results, feature_metadata, 
@@ -78,7 +134,16 @@ class AutoMLCoordinator:
             # Update prediction handler with task type
             self.prediction_handler.set_task_type(task_type)
             
-            # Step 2: Run optimization search (meta-learning + hyperparameter search)
+            # Step 2: Advanced NAS for neural networks (if enabled and applicable)
+            if (self.enable_advanced_features and self.nas_engine and 
+                not disable_neural_networks and 'neural_network' in str(dataset_metadata)):
+                self.logger.info("🧠 Running advanced Neural Architecture Search...")
+                best_architecture = self.nas_engine.search_architecture(
+                    X_processed, y_processed, task_type, max_trials=min(20, self.n_trials//2)
+                )
+                self.logger.info(f"🏆 Best NAS architecture found with {best_architecture['layers']} layers")
+            
+            # Step 3: Run optimization search (meta-learning + hyperparameter search)
             best_params, best_model_name, optimization_metadata = self.optimization_manager.run_optimization(
                 X_processed, y_processed, task_type, dataset_profile, 
                 dataset_metadata, feature_metadata, data_type_results, 
@@ -97,7 +162,7 @@ class AutoMLCoordinator:
                 # For classification, keep accuracy as positive
                 self.best_score = optimization_metadata.get("best_score", 0.0)
             
-            # Step 3: Build final pipeline with best parameters
+            # Step 4: Build final pipeline with best parameters
             self.best_pipeline = self.pipeline_builder.build_final_pipeline(
                 X_processed, y_processed, best_params, best_model_name,
                 task_type, self.n_trials, optimization_metadata,
@@ -106,6 +171,14 @@ class AutoMLCoordinator:
             
             if self.progress_tracker:
                 self.progress_tracker.finish_optimization()
+            
+            # Step 5: Advanced distributed optimization report (if enabled)
+            if self.enable_advanced_features and self.distributed_engine:
+                self.logger.info("☁️ Distributed optimization intelligence available")
+                # Store distributed patterns for future use
+                self.distributed_engine.learn_resource_performance(
+                    task_type, {'trials': self.n_trials}, self.best_score
+                )
             
             return self
             

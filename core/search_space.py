@@ -19,15 +19,18 @@ def get_search_space(trial, task_type="classification", priors=None, disable_neu
         if not disable_neural_networks:
             model_options.append("classification_neural_network")
     else:  # regression
+        # Prioritize simpler models for regression to avoid overfitting
         model_options = [
-            "regression_random_forest_regressor",
-            "regression_linear_regression",
-            "regression_ridge",
-            "regression_lasso", 
-            "regression_svr",
+            "regression_linear_regression",      # Best for linear relationships
+            "regression_ridge",                # Good regularized linear
+            "regression_random_forest_regressor",  # Good general purpose
             "regression_xgboost_regressor",
             "regression_gradient_boosting_regressor",
             "regression_lightgbm_regressor",
+            "regression_lasso",                # Regularized linear
+            # Move complex models to end
+            "regression_svr",                  # Can be problematic
+            "regression_neural_network_regressor",  # Most complex
         ]
         if not disable_neural_networks:
             model_options.append("regression_neural_network_regressor")
@@ -61,18 +64,15 @@ def get_search_space(trial, task_type="classification", priors=None, disable_neu
         if imputer_options is None:
             imputer_options = ["mean", "median", "most_frequent"]
 
-    model_name = trial.suggest_categorical("model", model_options)
-    scaler = trial.suggest_categorical("scaler", scaler_options)
-    imputer = trial.suggest_categorical("imputer", imputer_options)
-
-    use_feature_selection = trial.suggest_categorical("feature_selection", [True, False])
-
+    # Common preprocessing parameters
     params = {
-        "model": model_name,
-        "scaler": scaler,
-        "imputer": imputer,
-        "feature_selection": use_feature_selection
+        "scaler": trial.suggest_categorical("scaler", scaler_options),
+        "imputer": trial.suggest_categorical("imputer", imputer_options),
+        "feature_selection": trial.suggest_categorical("feature_selection", [True, False]),
     }
+
+    model_name = trial.suggest_categorical("model", model_options)
+    params["model"] = model_name
 
     # Model-specific hyperparameters - ONLY suggest parameters relevant to the selected model
     if "random_forest" in model_name:
@@ -84,11 +84,21 @@ def get_search_space(trial, task_type="classification", priors=None, disable_neu
         })
     
     elif "logistic_regression" in model_name:
+        # Fix solver-penalty compatibility
+        solver = trial.suggest_categorical("solver", ["liblinear", "saga"])
         params.update({
             "C": trial.suggest_float("C", 0.001, 100.0, log=True),
-            "penalty": trial.suggest_categorical("penalty", ["l1", "l2", "elasticnet"]),
-            "solver": trial.suggest_categorical("solver", ["liblinear", "saga"]),
+            "solver": solver,
         })
+        
+        # Only suggest compatible penalties for the selected solver
+        if solver == "liblinear":
+            params["penalty"] = trial.suggest_categorical("penalty", ["l1", "l2"])
+        else:  # saga
+            params["penalty"] = trial.suggest_categorical("penalty", ["l1", "l2", "elasticnet"])
+            # For elasticnet, need to set l1_ratio
+            if params["penalty"] == "elasticnet":
+                params["l1_ratio"] = trial.suggest_float("l1_ratio", 0.1, 0.9)
     
     elif "xgboost" in model_name:
         params.update({
@@ -102,7 +112,7 @@ def get_search_space(trial, task_type="classification", priors=None, disable_neu
     elif "svm" in model_name or "svr" in model_name:
         params.update({
             "C": trial.suggest_float("C", 0.1, 100.0, log=True),
-            "kernel": trial.suggest_categorical("kernel", ["linear", "rbf", "poly"]),
+            "kernel": trial.suggest_categorical("kernel", ["linear", "rbf"]),
             "gamma": trial.suggest_categorical("gamma", ["scale", "auto"]),
         })
         if "svm" in model_name:  # Classification specific
@@ -134,7 +144,7 @@ def get_search_space(trial, task_type="classification", priors=None, disable_neu
     elif "ridge" in model_name:
         params.update({
             "alpha": trial.suggest_float("alpha", 0.1, 10.0, log=True),
-            "solver": trial.suggest_categorical("solver", ["auto", "svd", "cholesky"]),
+            "solver": trial.suggest_categorical("solver", ["svd", "cholesky", "lsqr", "sag", "saga"]),
         })
     
     elif "lasso" in model_name:
@@ -166,6 +176,7 @@ def get_search_space(trial, task_type="classification", priors=None, disable_neu
         })
     
     elif "neural_network" in model_name:
+        # Full neural network search space - revolutionary dynamic suggestions
         params.update({
             "max_layers": trial.suggest_int("max_layers", 1, 4),
             "max_neurons": trial.suggest_int("max_neurons", 32, 256),

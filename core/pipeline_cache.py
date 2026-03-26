@@ -267,12 +267,14 @@ class PipelineCache:
     
     def get_cached_pipeline(self, 
                            X: np.ndarray,
+                           y: np.ndarray,
                            pipeline_config: Dict[str, Any]) -> Tuple[np.ndarray, List[BaseEstimator]]:
         """
         Get cached pipeline or create and cache new one
         
         Args:
             X: Input data
+            y: Target data
             pipeline_config: Pipeline configuration
             
         Returns:
@@ -321,7 +323,11 @@ class PipelineCache:
                     continue
                 
                 if hasattr(component, 'fit_transform'):
-                    X_transformed = component.fit_transform(X_transformed)
+                    # Check if this is a feature selection component that needs y
+                    if 'selector' in step_type or 'feature_selection' in step_type:
+                        X_transformed = component.fit_transform(X_transformed, y)
+                    else:
+                        X_transformed = component.fit_transform(X_transformed)
                 else:
                     X_transformed = component.fit(X_transformed).transform(X_transformed)
                 
@@ -461,18 +467,20 @@ class CachedPipelineBuilder:
     
     def build_cached_pipeline(self, 
                              X: np.ndarray,
+                             y: np.ndarray,
                              config: Dict[str, Any]) -> Tuple[np.ndarray, List[BaseEstimator]]:
         """
         Build pipeline with caching
         
         Args:
             X: Input data
+            y: Target data
             config: Pipeline configuration
             
         Returns:
             Transformed data and fitted components
         """
-        return self.cache.get_cached_pipeline(X, config)
+        return self.cache.get_cached_pipeline(X, y, config)
     
     def transform_with_cache(self, 
                            X: np.ndarray,

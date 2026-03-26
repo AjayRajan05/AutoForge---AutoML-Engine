@@ -33,7 +33,7 @@ class OptimizationManager:
             # Lasso regression specific parameters  
             "lasso": ["alpha", "selection"],
             
-            # Neural network specific parameters
+            # Neural network specific parameters - simplified to avoid Optuna issues
             "neural_network": ["max_layers", "max_neurons", "activation", "solver", 
                               "alpha", "learning_rate_init", "max_iter", "early_stopping"],
             
@@ -48,7 +48,7 @@ class OptimizationManager:
             "svr": ["C", "kernel", "gamma"],
             
             # Logistic regression parameters
-            "logistic_regression": ["C", "penalty", "solver"],
+            "logistic_regression": ["C", "penalty", "solver", "l1_ratio"],
             
             # Gradient boosting parameters
             "gradient_boosting": ["n_estimators", "learning_rate", "max_depth", "subsample"],
@@ -164,11 +164,29 @@ class OptimizationManager:
         # Hyperparameter optimization
         if self.use_adaptive_optimization:
             self.logger.info("DEBUG: Using adaptive optimization")
+            
+            # Adaptive configuration based on dataset size
+            dataset_size = len(X) if hasattr(X, '__len__') else 0
+            is_large_dataset = dataset_size > 10000
+            
+            if is_large_dataset:
+                # Reduced trials for large datasets
+                initial_trials = min(10, self.n_trials)
+                max_trials = min(25, self.n_trials)
+                cv_folds = min(3, self.cv)
+                self.logger.info(f"Large dataset detected ({dataset_size} samples). Using reduced optimization: {max_trials} trials, {cv_folds} CV folds")
+            else:
+                initial_trials = min(20, self.n_trials)
+                max_trials = self.n_trials
+                cv_folds = self.cv
+            
             optimizer = AdaptiveOptimizer(
-                initial_trials=min(20, self.n_trials),
-                max_trials=self.n_trials,
+                initial_trials=initial_trials,
+                max_trials=max_trials,
                 time_budget=self.timeout,
-                cv_folds=self.cv
+                cv_folds=cv_folds,
+                large_dataset_threshold=10000,
+                sample_ratio=0.3
             )
             
             _task_type = task_type
@@ -189,15 +207,35 @@ class OptimizationManager:
                     k: v for k, v in filtered_params.items()
                     if k not in ["scaler", "imputer", "feature_selection", "model"]
                 }
+                
+                # DEBUG: Log parameter filtering
+                self.logger.debug(f"DEBUG: Model: {model_name}")
+                self.logger.debug(f"DEBUG: Original params: {list(params.keys())}")
+                self.logger.debug(f"DEBUG: Filtered params: {list(filtered_params.keys())}")
+                self.logger.debug(f"DEBUG: Model params for model creation: {model_params}")
+                
+                # Additional debug for logistic regression
+                if "logistic_regression" in model_name:
+                    self.logger.warning(f"DEBUG: Logistic regression model_params: {model_params}")
+                
                 model = model_cls(**model_params)
-                pipeline = build_pipeline(params, model)
+                # CRITICAL FIX: Use filtered_params for pipeline, not original params
+                pipeline = build_pipeline(filtered_params, model)
                 
                 from sklearn.model_selection import cross_val_score
                 import numpy as np
                 
                 try:
                     scoring = 'accuracy' if task_type == 'classification' else 'neg_mean_squared_error'
-                    cv_scores = cross_val_score(pipeline, X, y, cv=3, scoring=scoring)
+                    
+                    # Adaptive CV based on dataset size
+                    dataset_size = len(X) if hasattr(X, '__len__') else 0
+                    if dataset_size > 10000:
+                        cv_folds = 3  # Reduced CV for large datasets
+                    else:
+                        cv_folds = self.cv
+                    
+                    cv_scores = cross_val_score(pipeline, X, y, cv=cv_folds, scoring=scoring)
                     
                     # Handle infinite/NaN scores
                     mean_score = cv_scores.mean()
@@ -242,6 +280,7 @@ class OptimizationManager:
         except Exception as e:
             self.logger.error(f"Adaptive optimization failed: {e}")
             top_trials = None  # Explicitly set to None on failure
+            optimization_metadata = {}  # Ensure metadata is also set
         
         if top_trials is None or not top_trials or len(top_trials) == 0:
             # Fallback to original optimizer

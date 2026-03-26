@@ -30,7 +30,9 @@ class AdaptiveOptimizer:
                  pruning_patience: int = 5,
                  improvement_threshold: float = 0.001,
                  time_budget: Optional[float] = None,
-                 cv_folds: int = 5):
+                 cv_folds: int = 5,
+                 large_dataset_threshold: int = 10000,
+                 sample_ratio: float = 0.3):
         """
         Initialize adaptive optimizer
         
@@ -41,6 +43,8 @@ class AdaptiveOptimizer:
             improvement_threshold: Minimum improvement to continue
             time_budget: Maximum time in seconds
             cv_folds: Cross-validation folds
+            large_dataset_threshold: Dataset size to trigger sampling
+            sample_ratio: Fraction of data to sample for large datasets
         """
         self.initial_trials = initial_trials
         self.max_trials = max_trials
@@ -48,6 +52,8 @@ class AdaptiveOptimizer:
         self.improvement_threshold = improvement_threshold
         self.time_budget = time_budget
         self.cv_folds = cv_folds
+        self.large_dataset_threshold = large_dataset_threshold
+        self.sample_ratio = sample_ratio
         
         self.study = None
         self.trial_history = []
@@ -107,6 +113,22 @@ class AdaptiveOptimizer:
         Returns:
             List of (score, model_name, params) and optimization metadata
         """
+        # Smart sampling for large datasets
+        if len(X) > self.large_dataset_threshold:
+            import numpy as np
+            sample_size = max(1000, int(len(X) * self.sample_ratio))
+            indices = np.random.choice(len(X), sample_size, replace=False)
+            X_sampled = X.iloc[indices] if hasattr(X, 'iloc') else X[indices]
+            y_sampled = y.iloc[indices] if hasattr(y, 'iloc') else y[indices]
+            logger.info(f"Large dataset detected ({len(X)} samples). Using sample of {sample_size} for optimization")
+            X, y = X_sampled, y_sampled
+        
+        # Reduce CV folds for large datasets to speed up optimization
+        if len(X) > self.large_dataset_threshold:
+            original_cv_folds = self.cv_folds
+            self.cv_folds = min(3, self.cv_folds)
+            logger.info(f"Reduced CV folds from {original_cv_folds} to {self.cv_folds} for large dataset")
+        
         if self.study is None:
             self.create_study()
         
@@ -115,14 +137,16 @@ class AdaptiveOptimizer:
             return self._adaptive_objective(trial, objective_func, X, y, task_type)
         
         # Adaptive optimization loop
-        current_trials = self.initial_trials
+        current_trials = min(self.initial_trials, 15)  # Reduce initial trials for speed
         iteration = 0
         optimization_metadata = {
             "total_trials": 0,
             "pruned_trials": 0,
             "optimization_time": 0,
             "convergence_achieved": False,
-            "dynamic_budget_used": False
+            "dynamic_budget_used": False,
+            "dataset_sampled": len(X) != (len(X) if not hasattr(X, '__len__') else len(X)),
+            "original_cv_folds": original_cv_folds if 'original_cv_folds' in locals() else self.cv_folds
         }
         
         while current_trials <= self.max_trials:
@@ -210,7 +234,13 @@ class AdaptiveOptimizer:
             
         except optuna.TrialPruned:
             raise
+        except optuna.exceptions.OptunaError as e:
+            # Handle Optuna-specific errors (like CategoricalDistribution issues)
+            logger.warning(f"Trial {trial.number} failed with Optuna error: {e}")
+            # Return a very bad score instead of failing
+            return -1.0 if task_type == "classification" else -1e6
         except Exception as e:
+            # Handle other errors (model fitting, data issues, etc.)
             logger.warning(f"Trial {trial.number} failed: {e}")
             # Return a very bad score instead of failing
             return -1.0 if task_type == "classification" else -1e6
@@ -257,19 +287,13 @@ class AdaptiveOptimizer:
         # Check if all scores are infinite (regression problem)
         if all(score == float('inf') for score in recent_scores):
             logger.warning("All recent trials have infinite scores - stopping optimization")
-            # Ensure we have some trials to return even if they're bad
-            if not self.study.trials:
-                return [], optimization_metadata
-            return [], optimization_metadata
+            return False, 0
         
         # Filter out infinite scores for improvement calculation
         finite_scores = [score for score in recent_scores if score != float('inf')]
         if not finite_scores:
             logger.warning("No finite scores available - stopping optimization")
-            # Ensure we have some trials to return even if they're bad
-            if not self.study.trials:
-                return [], optimization_metadata
-            return [], optimization_metadata
+            return False, 0
         
         # Calculate improvement
         best_recent = max(finite_scores)
@@ -277,7 +301,8 @@ class AdaptiveOptimizer:
         
         improvement = best_recent - best_overall if best_overall is not None else 0
         
-        # Decision logic
+        # Decision logic with more aggressive convergence for large datasets
+        # Note: We can't access X here, so we use a simpler convergence strategy
         if improvement < self.improvement_threshold:
             logger.info(f"Small improvement ({improvement:.6f}), considering convergence")
             

@@ -67,6 +67,45 @@ class SmartFeatureEngineering:
         """
         logger.info("Starting smart feature engineering...")
         
+        # Add constraints for large datasets to prevent excessive computation
+        n_samples, n_features = X.shape
+        
+        # AGGRESSIVE CONSTRAINTS: Skip polynomial features for high-dimensional data
+        if n_features > 15:  # Much more aggressive limit
+            logger.warning(f"Too many features ({n_features}) for polynomial features. Skipping polynomial generation.")
+            metadata = {
+                'engineered_features': 0,
+                'original_features': n_features,
+                'total_features': n_features,
+                'engineering_type': 'skipped_polynomial'
+            }
+            return X, metadata
+        elif n_features > 8:  # Prevent polynomial explosion for medium-sized datasets
+            logger.warning(f"Medium-sized dataset ({n_features} features). Limiting polynomial degree to prevent explosion.")
+            self.max_polynomial_degree = 1  # Only linear features, no quadratic/cubic
+        elif n_samples > 20000 or n_features > 200:
+            logger.warning(f"Very large dataset detected ({n_samples} samples, {n_features} features). Skipping all feature engineering for performance.")
+            metadata = {
+                'engineered_features': 0,
+                'original_features': n_features,
+                'total_features': n_features,
+                'engineering_type': 'skipped_large_dataset'
+            }
+            return X, metadata
+        elif n_samples > 5000 or n_features > 100:
+            logger.warning(f"Large dataset detected ({n_samples} samples, {n_features} features). Limiting feature engineering.")
+            # Limit polynomial features for large datasets
+            if n_features > 50:
+                self.max_polynomial_degree = 1  # No polynomial features for very high dimensional data
+            elif n_features > 20:
+                self.max_polynomial_degree = 1  # No polynomial features for high dimensional data
+            else:
+                self.max_polynomial_degree = 1  # Conservative for large datasets
+            
+            # Limit interaction features
+            self.max_interaction_features = min(10, n_features // 2)
+            self.feature_selection_ratio = 0.5  # Less aggressive selection for medium datasets
+        
         # Convert to DataFrame for easier handling
         if isinstance(X, np.ndarray):
             feature_names = [f"feature_{i}" for i in range(X.shape[1])]
@@ -315,6 +354,10 @@ class SmartFeatureEngineering:
         Returns:
             Whether to create polynomial features
         """
+        # RESPECT CONSTRAINTS: Check if polynomial degree was limited to 1 (no polynomial features)
+        if self.max_polynomial_degree <= 1:
+            return False
+            
         # Don't create polynomial features if we already have many features
         if n_features > 50:
             return False
@@ -352,6 +395,22 @@ class SmartFeatureEngineering:
         numeric_cols = X.select_dtypes(include=[np.number]).columns
         if len(numeric_cols) < 2:
             return X
+        
+        # Aggressive constraints to prevent explosion of features
+        n_samples, n_features = X.shape
+        max_features_for_poly = 15  # Hard limit
+        
+        if len(numeric_cols) > max_features_for_poly:
+            logger.warning(f"Too many numeric features ({len(numeric_cols)}) for polynomial features. Skipping polynomial generation.")
+            return X
+        
+        # Calculate potential number of polynomial features
+        if self.max_polynomial_degree >= 2:
+            potential_features = len(numeric_cols) ** 2 + len(numeric_cols)
+            if potential_features > 500:  # Hard limit on total features
+                logger.warning(f"Polynomial features would create {potential_features} features. Limiting to degree 1.")
+                self.max_polynomial_degree = 1
+                return X
         
         try:
             poly = PolynomialFeatures(degree=self.max_polynomial_degree, include_bias=False)
@@ -402,6 +461,12 @@ class SmartFeatureEngineering:
         # Only apply to numeric features
         numeric_cols = X.select_dtypes(include=[np.number]).columns
         if len(numeric_cols) < 2:
+            return X
+        
+        # Skip interaction features for large datasets to prevent slowdown
+        n_samples, n_features = X.shape
+        if n_samples > 10000 or n_features > 50:
+            logger.warning(f"Large dataset ({n_samples} samples, {n_features} features). Skipping interaction features.")
             return X
         
         X_result = X.copy()
@@ -555,7 +620,7 @@ class SmartFeatureEngineering:
             self._last_feature_importances = feature_scores.copy()
             
             # Determine number of features to keep
-            n_features_to_keep = max(1, int(len(numeric_cols) * self.feature_selection_ratio))
+            n_features_to_keep = max(2, int(len(numeric_cols) * self.feature_selection_ratio))  # Keep at least 2 features
             
             # Select top features
             sorted_features = sorted(feature_scores.items(), key=lambda x: x[1], reverse=True)

@@ -115,8 +115,60 @@ class SimpleNeuralNetwork(BaseEstimator, ClassifierMixin, RegressorMixin):
         return model
     
     def fit(self, X, y):
-        """Fit the neural network model"""
+        """Fit the neural network model with enhanced parameter validation"""
         try:
+            # Enhanced parameter validation for revolutionary dynamic suggestions
+            if not hasattr(self, 'task_type') or self.task_type is None:
+                self.task_type = "classification"  # Default
+            
+            # Validate and sanitize parameters dynamically
+            if not hasattr(self, 'max_layers') or self.max_layers is None:
+                self.max_layers = 2
+            elif self.max_layers < 1:
+                self.max_layers = 1
+            elif self.max_layers > 10:  # Reasonable upper limit
+                self.max_layers = 10
+            
+            if not hasattr(self, 'max_neurons') or self.max_neurons is None:
+                self.max_neurons = 64
+            elif self.max_neurons < 8:
+                self.max_neurons = 8
+            elif self.max_neurons > 1024:  # Reasonable upper limit
+                self.max_neurons = 1024
+                
+            if not hasattr(self, 'activation') or self.activation is None:
+                self.activation = "relu"
+            elif self.activation not in ["relu", "tanh", "logistic"]:
+                self.activation = "relu"  # Default to safe option
+                
+            if not hasattr(self, 'solver') or self.solver is None:
+                self.solver = "adam"
+            elif self.solver not in ["adam", "sgd"]:
+                self.solver = "adam"  # Default to safe option
+                
+            if not hasattr(self, 'alpha') or self.alpha is None:
+                self.alpha = 0.0001
+            elif self.alpha < 1e-6:
+                self.alpha = 1e-6
+            elif self.alpha > 1.0:
+                self.alpha = 1.0
+                
+            if not hasattr(self, 'learning_rate_init') or self.learning_rate_init is None:
+                self.learning_rate_init = 0.001
+            elif self.learning_rate_init < 1e-5:
+                self.learning_rate_init = 1e-5
+            elif self.learning_rate_init > 1.0:
+                self.learning_rate_init = 1.0
+                
+            if not hasattr(self, 'max_iter') or self.max_iter is None:
+                self.max_iter = 500
+            elif self.max_iter < 100:
+                self.max_iter = 100
+            elif self.max_iter > 10000:  # Reasonable upper limit
+                self.max_iter = 10000
+                
+            if not hasattr(self, 'early_stopping') or self.early_stopping is None:
+                self.early_stopping = True
             # Scale features
             X_scaled = self.scaler.fit_transform(X)
             

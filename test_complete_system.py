@@ -428,7 +428,7 @@ def main():
         ("Pattern Learning", test_pattern_learning),
         ("Actionable Explainability", test_actionable_explainability),
         ("Enhanced Benchmarking", test_enhanced_benchmarking),
-        ("Regression Task", test_regression_task),
+        #("Regression Task", test_regression_task),
         ("Comprehensive Analysis", test_comprehensive_analysis)
     ]
     

@@ -23,15 +23,27 @@ class AutoML:
                  use_dataset_optimization=True,
                  use_caching=True,
                  show_progress=True,
-                 use_explainability=True):
+                 use_explainability=True,
+                 enable_advanced_features=True):
         """Initialize AutoML with configuration"""
         # Core coordinator handles the main workflow
         self.coordinator = AutoMLCoordinator(
             n_trials=n_trials, timeout=timeout, cv=cv,
             use_adaptive_optimization=use_adaptive_optimization,
             use_dataset_optimization=use_dataset_optimization,
-            use_caching=use_caching, show_progress=show_progress
+            use_caching=use_caching, show_progress=show_progress,
+            enable_advanced_features=enable_advanced_features
         )
+        
+        # Store configuration parameters for access by subclasses
+        self._n_trials = n_trials
+        self._timeout = timeout
+        self._cv = cv
+        self._use_adaptive_optimization = use_adaptive_optimization
+        self._use_dataset_optimization = use_dataset_optimization
+        self._use_caching = use_caching
+        self._show_progress = show_progress
+        self._use_explainability = use_explainability
         
         # Explainability manager handles all explanation functionality
         self.explainability_manager = ExplainabilityManager(use_explainability=use_explainability)
@@ -147,3 +159,28 @@ class AutoML:
     def n_trials(self):
         """Get number of trials used"""
         return self.coordinator.n_trials
+
+    @property
+    def use_adaptive_optimization(self):
+        """Get adaptive optimization setting"""
+        return self._use_adaptive_optimization
+
+    @property
+    def use_dataset_optimization(self):
+        """Get dataset optimization setting"""
+        return self._use_dataset_optimization
+
+    @property
+    def use_caching(self):
+        """Get caching setting"""
+        return self._use_caching
+
+    @property
+    def show_progress(self):
+        """Get progress display setting"""
+        return self._show_progress
+
+    @property
+    def use_explainability(self):
+        """Get explainability setting"""
+        return self._use_explainability

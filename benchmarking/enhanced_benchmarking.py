@@ -19,6 +19,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, mean_squared_error, r2_score, f1_score
 import warnings
 
+# 🔥 PRODUCTION-GRADE: Configuration for Unicode handling
+CONFIG = {
+    "allow_unicode": False  # Set to True for full Unicode support
+}
+
 # Import AutoML and competitors - moved inside methods to avoid circular imports
 
 logger = logging.getLogger(__name__)
@@ -38,11 +43,18 @@ class EnhancedBenchmarking:
         """
         self.results_dir = Path(results_dir)
         self.results_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Results storage
+        self.failure_log = []  # 🔥 PRODUCTION-GRADE: Track failures
         self.benchmark_results = {}
         
         logger.info(f"Enhanced benchmarking initialized: {self.results_dir}")
+    
+    def safe_encode(self, text: str) -> str:
+        """🔥 PRODUCTION-GRADE: Safe encoding wrapper"""
+        if CONFIG["allow_unicode"]:
+            return text.encode("utf-8", errors="ignore").decode("utf-8")
+        else:
+            # Remove non-ASCII characters for maximum compatibility
+            return text.encode("ascii", errors="ignore").decode("ascii")
     
     def run_comprehensive_benchmark(self, 
                                   datasets: List[Dict[str, Any]] = None,
@@ -845,8 +857,11 @@ class EnhancedBenchmarking:
     def _generate_text_report(self, results: Dict[str, Any], report_path: Path) -> None:
         """Generate human-readable benchmarking report"""
         try:
-            with open(report_path, 'w') as f:
-                f.write("🏆 AutoForge Enhanced Benchmarking Report\n")
+            # 🔥 PRODUCTION-GRADE: Force UTF-8 encoding
+            with open(report_path, 'w', encoding='utf-8') as f:
+                # 🔥 PRODUCTION-GRADE: Safe encoding wrapper
+                safe_title = self.safe_encode("🏆 AutoForge Enhanced Benchmarking Report")
+                f.write(safe_title + "\n")
                 f.write("=" * 60 + "\n\n")
                 
                 # Executive summary

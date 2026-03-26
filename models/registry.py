@@ -6,6 +6,9 @@ from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.naive_bayes import GaussianNB
 from xgboost import XGBClassifier, XGBRegressor
 from typing import Dict, Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Import advanced models
 try:
@@ -15,6 +18,83 @@ except ImportError:
     ADVANCED_MODELS_AVAILABLE = False
     LightGBMWrapper = None
     SimpleNeuralNetwork = None
+
+# PRODUCTION-GRADE: Model-Specific Search Spaces
+MODEL_SEARCH_SPACE = {
+    "logistic_regression": {
+        "solver": ["lbfgs", "liblinear", "saga"],
+        "C": (1e-4, 10.0),
+        "penalty": ["l1", "l2"],
+        "max_iter": [100, 200, 500]
+    },
+    "neural_network": {
+        "optimizer": ["adam", "sgd"],
+        "learning_rate": (1e-4, 1e-1),
+        "hidden_layer_sizes": [(64,), (128,), (64, 32)],
+        "activation": ["relu", "tanh", "logistic"],
+        "max_iter": [200, 500, 1000]
+    },
+    "svm": {
+        "kernel": ["linear", "rbf", "poly"],
+        "C": (0.1, 100.0),
+        "gamma": ["scale", "auto"]
+    },
+    "random_forest": {
+        "n_estimators": (50, 300),
+        "max_depth": (3, 20),
+        "min_samples_split": (2, 20),
+        "min_samples_leaf": (1, 10)
+    },
+    "xgboost": {
+        "n_estimators": (50, 300),
+        "max_depth": (3, 12),
+        "learning_rate": (0.01, 0.3),
+        "subsample": (0.6, 1.0)
+    }
+}
+
+# PRODUCTION-GRADE: Default Parameters for Fallback
+DEFAULT_PARAMS = {
+    "logistic_regression": {"solver": "lbfgs", "C": 1.0, "penalty": "l2", "max_iter": 100},
+    "neural_network": {"optimizer": "adam", "learning_rate": 0.001, "hidden_layer_sizes": (64,), "activation": "relu", "max_iter": 500},
+    "svm": {"kernel": "rbf", "C": 1.0, "gamma": "scale"},
+    "random_forest": {"n_estimators": 100, "max_depth": 10, "min_samples_split": 2, "min_samples_leaf": 1},
+    "xgboost": {"n_estimators": 100, "max_depth": 6, "learning_rate": 0.1, "subsample": 0.8}
+}
+
+# PRODUCTION-GRADE: Parameter Validation
+def validate_params(model_name: str, params: Dict[str, Any]) -> bool:
+    """Validate parameters for specific model"""
+    if model_name not in MODEL_SEARCH_SPACE:
+        logger.warning(f"Unknown model: {model_name}")
+        return False
+    
+    valid_space = MODEL_SEARCH_SPACE[model_name]
+    
+    for param_name, param_value in params.items():
+        if param_name not in valid_space:
+            logger.warning(f"Invalid param {param_name} for model {model_name}")
+            return False
+        
+        if isinstance(valid_space[param_name], list):
+            if param_value not in valid_space[param_name]:
+                logger.warning(f"Invalid value {param_value} for param {param_name} in model {model_name}")
+                return False
+    
+    return True
+
+# PRODUCTION-GRADE: Safe Parameter Correction
+def safe_params(model_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Auto-correct invalid parameters"""
+    try:
+        if validate_params(model_name, params):
+            return params
+        else:
+            logger.warning(f"Invalid params for {model_name}, using defaults")
+            return DEFAULT_PARAMS.get(model_name, {})
+    except Exception as e:
+        logger.error(f"Parameter validation failed: {e}")
+        return DEFAULT_PARAMS.get(model_name, {})
 
 # Enhanced MODEL_REGISTRY with advanced models
 CLASSIFICATION_MODELS = {

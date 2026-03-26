@@ -28,14 +28,9 @@ class KnowledgeBase:
 
     def load(self) -> List[Dict[str, Any]]:
         """
-        Load knowledge base with comprehensive error handling
+        Load all experiments from knowledge base
         """
         try:
-            if not os.path.exists(self.path):
-                self.logger.warning(f"Knowledge base file not found: {self.path}")
-                self._create_empty_logs()
-                return []
-            
             with open(self.path, "r") as f:
                 data = json.load(f)
             
@@ -65,6 +60,48 @@ class KnowledgeBase:
         except Exception as e:
             self.logger.error(f"Failed to load knowledge base: {e}")
             return []
+
+    def get_similar_experiments(self, n_features, n_samples, task_type, top_k=5):
+        """
+        Get experiments similar to current dataset characteristics
+        """
+        experiments = self.load()
+        similar_experiments = []
+        
+        for exp in experiments:
+            # Check if experiment has relevant characteristics
+            exp_n_features = exp.get('dataset_profile', {}).get('num_cols', 0)
+            exp_n_samples = exp.get('dataset_profile', {}).get('num_rows', 0)
+            exp_task_type = exp.get('task_type')
+            
+            # Calculate similarity (simple heuristic)
+            if exp_task_type == task_type:
+                feature_similarity = 1.0 / (1.0 + abs(exp_n_features - n_features))
+                sample_similarity = 1.0 / (1.0 + abs(exp_n_samples - n_samples))
+                overall_similarity = (feature_similarity + sample_similarity) / 2.0
+                
+                similar_experiments.append({
+                    'experiment': exp,
+                    'similarity': overall_similarity
+                })
+        
+        # Sort by similarity and return top_k
+        similar_experiments.sort(key=lambda x: x['similarity'], reverse=True)
+        return [item['experiment'] for item in similar_experiments[:top_k]]
+    
+    def add_experiment(self, experiment_data):
+        """
+        Add a new experiment to the knowledge base
+        """
+        experiments = self.load()
+        experiments.append(experiment_data)
+        
+        try:
+            with open(self.path, "w") as f:
+                json.dump(experiments, f, indent=2)
+            self.logger.info(f"Added experiment to knowledge base")
+        except Exception as e:
+            self.logger.error(f"Failed to add experiment: {e}")
 
     def _is_valid_record(self, record: Dict[str, Any]) -> bool:
         """Check if a record has the required structure"""

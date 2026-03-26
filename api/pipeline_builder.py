@@ -108,11 +108,11 @@ class PipelineBuilder:
                 
                 if best_params.get("feature_selection", False):
                     pipeline_config["steps"].append({
-                        "type": "feature_selection",
+                        "type": "selector_kbest",
                         "params": {"k": min(10, X.shape[1])}
                     })
                 
-                X_transformed, components = cached_builder.build_cached_pipeline(X, pipeline_config)
+                X_transformed, components = cached_builder.build_cached_pipeline(X, y, pipeline_config)
                 model.fit(X_transformed, y)
                 
                 from sklearn.pipeline import Pipeline as SKPipeline
